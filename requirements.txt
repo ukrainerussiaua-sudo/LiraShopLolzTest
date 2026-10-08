@@ -1,0 +1,5 @@
+aiogram>=3.13,<4
+aiohttp>=3.10,<4
+supabase>=2.7.4,<3
+python-dotenv>=1.0.0
+tonsdk>=1.0.13
