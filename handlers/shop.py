@@ -12,6 +12,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart, Command
 
+import i18n
 import lolz
 import countries as C
 from config import (
@@ -22,12 +23,13 @@ from database import db
 import keyboards as K
 from keyboards import (
     B_CATALOG, B_TG, B_SUPPORT, B_PROFILE, B_BACK, B_HOME, B_CANCEL, B_BUY, B_GETCODE, B_RESET,
-    B_RESET_YES, B_MYACC, B_HISTORY, B_REFERRAL, B_INFO,
+    B_RESET_YES, B_MYACC, B_HISTORY, B_REFERRAL, B_INFO, B_LANG,
 )
 import texts as T
 from utils import (
     SHOP_PHOTO, PROFILE_PHOTO, INFO_PHOTO, SUPPORT_PHOTO, TELEGRAM_PHOTO, CATALOG_PHOTO,
     answer_screen, run_with_dots, is_subscribed, notify_admins, user_label, money,
+    send_lang_chooser, send_subscribe_screen,
 )
 
 router = Router()
@@ -194,6 +196,8 @@ def _register(user: User, ref: int | None):
     """Создаёт пользователя; реферал привязывается только новому."""
     is_new = db.find_user_by_id(user.id) is None
     db.get_user(user.id, user.username or "")
+    if is_new:
+        i18n.set_lang(user.id, i18n.lang_of(user.id) or "ru")      # язык, выбранный на первом экране, записываем в БД
     if is_new and ref and ref != user.id and db.find_user_by_id(ref):
         db.set_referrer(user.id, ref)      # бонус — только за ПОКУПКУ приглашённого
 
@@ -205,6 +209,37 @@ async def on_start(msg: Message, state: FSMContext):
     ref = int(args[1]) if len(args) > 1 and args[1].isdigit() else None
     _register(msg.from_user, ref)
     await show_main(msg, state)
+
+
+@router.message(F.text == B_LANG)
+async def on_lang_menu(msg: Message):
+    await send_lang_chooser(msg)
+
+
+@router.callback_query(F.data.startswith("lang:"))
+async def on_lang(cb: CallbackQuery, state: FSMContext, bot: Bot):
+    """Выбор языка. Новый пользователь → дальше проверка подписки на канал → регистрация → меню. Старый — сразу меню."""
+    lang = cb.data.split(":", 1)[1]
+    if lang not in ("ru", "uk"):
+        return await cb.answer()
+    uid = cb.from_user.id
+    existed = db.find_user_by_id(uid) is not None
+    i18n.set_lang(uid, lang)
+    await cb.answer("✅")
+    msg = cb.message
+    if msg is None:
+        return
+    try:
+        await msg.delete()
+    except Exception:
+        pass
+    if existed:
+        return await show_main(msg, state)
+    ref = (await state.get_data()).get("pending_ref")
+    if uid in ADMIN_IDS or await is_subscribed(bot, uid, use_cache=False):
+        _register(cb.from_user, ref)
+        return await show_main(msg, state)
+    await send_subscribe_screen(msg, cb.from_user.first_name or "")      # проверка на канал
 
 
 @router.callback_query(F.data == "check_sub")

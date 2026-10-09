@@ -63,6 +63,30 @@ class Database:
         r = self.sb.table("users").select("*").eq("user_id", uid).execute()
         return r.data[0] if r.data else None
 
+    # ──────────────── ЯЗЫК (users.lang: 'ru' | 'uk') ────────────────
+    _lang_warned = False
+
+    def get_lang(self, uid: int) -> str:
+        try:
+            r = self.sb.table("users").select("lang").eq("user_id", uid).execute()
+            return (r.data[0].get("lang") or "") if r.data else ""
+        except Exception as e:
+            if not self._lang_warned:
+                Database._lang_warned = True
+                print(f"[DB get_lang] {e!r} — выполните ALTER TABLE users ADD COLUMN lang из supabase_schema.sql (без него язык хранится только в памяти)")
+            return ""
+
+    def set_lang(self, uid: int, lang: str) -> bool:
+        """False — пользователя ещё нет в БД (язык запишет _register) или нет колонки lang."""
+        try:
+            r = self.sb.table("users").update({"lang": lang}).eq("user_id", uid).execute()
+            return bool(r.data)
+        except Exception as e:
+            if not self._lang_warned:
+                Database._lang_warned = True
+                print(f"[DB set_lang] {e!r} — выполните ALTER TABLE users ADD COLUMN lang из supabase_schema.sql")
+            return False
+
     def find_user_by_username(self, username: str) -> dict | None:
         r = self.sb.table("users").select("*").ilike("username", username).execute()
         return r.data[0] if r.data else None
@@ -403,6 +427,26 @@ class Database:
             return r.data or []
         except Exception:
             return []
+
+    # ──────────────────────────────────────────
+    # USED MONO TX — защита от повторного зачисления одной транзакции Monobank
+    # ──────────────────────────────────────────
+    def is_mono_tx_used(self, tx_id: str) -> bool:
+        try:
+            r = self.sb.table("used_mono_tx").select("tx_id").eq("tx_id", tx_id).execute()
+            return bool(r.data)
+        except Exception:
+            return False
+
+    def claim_mono_tx(self, tx_id: str, payment_id: str, amount_uah: float = 0) -> bool:
+        """Атомарно помечает транзакцию Monobank использованной (PK tx_id). False — уже была занята."""
+        try:
+            self.sb.table("used_mono_tx").insert({
+                "tx_id": tx_id, "payment_id": payment_id, "amount_uah": amount_uah,
+                "used_at": datetime.now().isoformat()}).execute()
+            return True
+        except Exception:
+            return False
 
     # ──────────────── НАЦЕНКА / СТАТИСТИКА ────────────────
 

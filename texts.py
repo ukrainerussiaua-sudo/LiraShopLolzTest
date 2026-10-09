@@ -103,7 +103,7 @@ def txt_nofunds(bal: float, need: float) -> str:
 
 def txt_topup() -> str:
     return (f"{USDT} <b>ПОПОЛНИТЬ БАЛАНС</b>\n\nВыберите способ пополнения (баланс — в гривнах):\n\n"
-            f"💳 <b>Перевод на карту</b> — переводите ₴ на карту, админ подтверждает по чеку\n"
+            f"💳 <b>Перевод на карту</b> — переводите ₴ на карту, зачисление после проверки платежа\n"
             f"🪙 <b>Crypto Bot</b> — оплата криптой, зачисление автоматически\n"
             f"💠 <b>TON</b> — отправьте любую сумму TON с вашим ID в комментарии")
 
@@ -297,6 +297,17 @@ def txt_card_pay(amount: float, number: str, holder: str, bank: str, ttl_h: int)
             f"2) Нажмите «Я оплатил» и отправьте скриншот или чек перевода\n"
             f"3) Администратор проверит и пополнит баланс\n\n"
             f"⏰ Заявка действует {ttl_h} ч.")
+
+
+def txt_mono_pay(amount: float, number: str, holder: str, bank: str, ttl_min: int) -> str:
+    bank_line = f"🏦 Банк: {html.escape(bank)}\n" if bank else ""
+    return (f"💳 <b>ПЕРЕВОД НА КАРТУ</b>\n\n"
+            f"💰 Сумма к оплате: <b>{amount:.2f} {CUR}</b>\n\n"
+            f"💳 Карта: <code>{html.escape(number)}</code>\n"
+            f"👤 Получатель: <b>{html.escape(holder)}</b>\n{bank_line}\n"
+            f"1) Переведите <b>ровно {amount:.2f} {CUR}</b> — обязательно с копейками, по ним бот находит ваш платёж\n"
+            f"2) Нажмите «Проверить оплату» — бот сверит поступление и пополнит баланс\n\n"
+            f"⏰ На оплату даётся <b>{ttl_min} минут</b>. На баланс зачисляется ровно переведённая сумма.")
 
 
 def txt_ton_topup(addr: str, uid: int, rate: float, sell: bool = False) -> str:

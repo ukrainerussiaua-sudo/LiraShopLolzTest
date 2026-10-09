@@ -86,6 +86,15 @@ def kb_subscribe_inline() -> InlineKeyboardMarkup:
     ])
 
 
+async def send_lang_chooser(msg: Message):
+    """Двуязычный экран выбора языка (показывается новым пользователям ДО проверки подписки)."""
+    from keyboards import ib
+    await msg.answer("🌐 <b>Выберите язык / Оберіть мову</b>",
+                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                         [ib("🇷🇺 Русский", callback_data="lang:ru")],
+                         [ib("🇺🇦 Українська", callback_data="lang:uk")]]))
+
+
 async def send_subscribe_screen(msg: Message, first_name: str):
     import texts as T          # локально: texts тянет lolz/countries
     await answer_screen(msg, T.txt_subscribe(first_name or "пользователь"),

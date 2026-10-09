@@ -91,7 +91,13 @@ CARD_NUMBER = os.getenv("CARD_NUMBER", "").strip()
 CARD_HOLDER = os.getenv("CARD_HOLDER", "").strip()
 CARD_BANK   = os.getenv("CARD_BANK", "").strip()
 MIN_TOPUP_DEFAULT = float(os.getenv("MIN_TOPUP", "50") or 50)          # ₴, меняется в админке
-CARD_PAYMENT_TTL_H = int(os.getenv("CARD_PAYMENT_TTL_H", "24") or 24)  # сколько живёт заявка без чека
+CARD_PAYMENT_TTL_H = int(os.getenv("CARD_PAYMENT_TTL_H", "24") or 24)  # сколько живёт заявка без чека (ручной режим)
+
+# Автопроверка перевода на карту через Monobank Open API (monopay.py). Токен задан → работает «Проверить оплату» без админа.
+# Токен: застосунок Monobank → «Ще» → «Інше» → «Monobank Open API». Карта в CARD_NUMBER/«Реквизиты карты» должна быть с этого токена.
+MONOBANK_API_TOKEN  = os.getenv("MONOBANK_API_TOKEN", "").strip()
+MONOBANK_ACCOUNT_ID = os.getenv("MONOBANK_ACCOUNT_ID", "0").strip() or "0"   # 0 = основной счёт; список: GET /personal/client-info
+MONOBANK_PAYMENT_TTL_MIN = int(os.getenv("MONOBANK_PAYMENT_TTL_MIN", "30") or 30)   # сколько минут даётся на оплату
 
 # Crypto Bot: счёт выставляется в UAH (fiat). Если Crypto Bot не принял UAH — запасной пересчёт в USDT по этому курсу.
 CRYPTO_PAY_TOKEN    = os.getenv("CRYPTO_PAY_TOKEN", "")

@@ -14,8 +14,11 @@ CREATE TABLE IF NOT EXISTS users (
     status          TEXT    DEFAULT 'Активен',        -- Активен | Заблокирован
     referrer_id     BIGINT  DEFAULT 0,
     purchases_count INT     DEFAULT 0,
-    active_discount FLOAT   DEFAULT 0
+    active_discount FLOAT   DEFAULT 0,
+    lang            TEXT    DEFAULT ''                -- ru | uk (выбор языка при первом /start)
 );
+-- для базы, созданной раньше (безопасно запускать повторно):
+ALTER TABLE users ADD COLUMN IF NOT EXISTS lang TEXT DEFAULT '';
 CREATE INDEX IF NOT EXISTS idx_users_username ON users (lower(username));
 
 -- 2. ПОКУПКИ (logins = 'lolz:<id товара на Lolz>')
@@ -56,7 +59,7 @@ CREATE TABLE IF NOT EXISTS promo_uses (
     PRIMARY KEY (code, user_id)
 );
 
--- 5. ОЖИДАЮЩИЕ ПЛАТЕЖИ (method: crypto | card — по нему фоновый контроллер знает, где проверять;
+-- 5. ОЖИДАЮЩИЕ ПЛАТЕЖИ (method: crypto | monobank | card — по нему фоновый контроллер знает, где проверять;
 --    card: pending → review (чек у админа) → paid | rejected | canceled | timeout)
 CREATE TABLE IF NOT EXISTS pending_payments (
     payment_id TEXT PRIMARY KEY,
@@ -111,6 +114,16 @@ CREATE TABLE IF NOT EXISTS used_receipts (
     used_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_used_receipts_user ON used_receipts (user_id);
+
+-- 11. ИСПОЛЬЗОВАННЫЕ ТРАНЗАКЦИИ MONOBANK (PK = id транзакции — защита от зачисления ОДНОЙ
+--     и той же реальной оплаты дважды двум разным пользователям / дважды одному)
+CREATE TABLE IF NOT EXISTS used_mono_tx (
+    tx_id       TEXT PRIMARY KEY,
+    payment_id  TEXT NOT NULL,
+    amount_uah  FLOAT DEFAULT 0,
+    used_at     TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_used_mono_tx_payment ON used_mono_tx (payment_id);
 
 -- 10. СТРАНЫ «ФИЗ. АККАУНТОВ»
 CREATE TABLE IF NOT EXISTS shop_countries (
@@ -215,6 +228,7 @@ ALTER TABLE bot_settings         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE used_receipts        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE shop_countries       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fragment_orders      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE used_mono_tx         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE gold_requests        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sales                ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ton_orders           ENABLE ROW LEVEL SECURITY;

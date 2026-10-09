@@ -9,8 +9,10 @@ handlers/topup.py — пополнение баланса (всё в гривн�
                         (tondeposit.py: автопоиск + кнопка «Проверить баланс»).
 Любое зачисление → billing.credit_topup → клиенту сообщение, админам уведомление «кто и на сколько пополнил».
 """
+import asyncio
 import html
 import re
+import time
 import uuid
 
 from aiogram import Router, F, Bot
@@ -21,10 +23,11 @@ from aiogram.enums import ParseMode
 
 from config import (
     EMOJI_CRYPTOBOT, ADMIN_IDS, SUPPORT_URL, CUR, CARD_NUMBER, CARD_HOLDER, CARD_BANK,
-    MIN_TOPUP_DEFAULT, CARD_PAYMENT_TTL_H,
+    MIN_TOPUP_DEFAULT, CARD_PAYMENT_TTL_H, MONOBANK_PAYMENT_TTL_MIN,
 )
 from database import db
-from payments import crypto_create_invoice, crypto_is_configured
+from payments import crypto_create_invoice, crypto_is_configured, credit_payment
+import monopay
 from billing import credit_topup
 import tondeposit
 import keyboards as K
@@ -151,6 +154,18 @@ async def on_amount(msg: Message, state: FSMContext, bot: Bot):
         if not card_enabled():
             return await msg.answer("⚠️ Оплата картой сейчас недоступна.")
         number, holder, bank = card_info()
+        if monopay.is_configured():                       # автопроверка по Monobank API
+            pid, total = monopay.create_payment(amount, uid)
+            await state.set_state(None)
+            await state.update_data(screen="topup")
+            await msg.answer(
+                T.txt_mono_pay(total, number, holder, bank, MONOBANK_PAYMENT_TTL_MIN),
+                parse_mode=ParseMode.HTML,
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [ib("Проверить оплату", "ok", callback_data=f"mono_check:{pid}")],
+                    [ib("Отмена", "cancel", callback_data=f"mono_cancel:{pid}")],
+                    [ib("Написать в поддержку", "chat", url=SUPPORT_URL)]]))
+            return await msg.answer("Меню ⬇️", reply_markup=K.kb_main_menu(uid in ADMIN_IDS))
         pid = f"card_{uuid.uuid4().hex[:12]}"
         db.add_pending(pid, uid, amount, "card")
         await state.set_state(None)
@@ -165,6 +180,73 @@ async def on_amount(msg: Message, state: FSMContext, bot: Bot):
         return await msg.answer("Меню ⬇️", reply_markup=K.kb_main_menu(uid in ADMIN_IDS))
 
     await show_topup_menu(msg, state)
+
+
+# ── карта через Monobank API: «Проверить оплату» ───────────
+_checking: set[str] = set()
+
+
+def _own_mono_pending(pid: str, uid: int) -> dict | None:
+    p = db.get_pending(pid)
+    if not p or int(p.get("user_id", 0)) != uid or p.get("method") != "monobank":
+        return None
+    return p
+
+
+@router.callback_query(F.data.startswith("mono_check:"))
+async def mono_check(cb: CallbackQuery, bot: Bot):
+    if is_banned(cb.from_user.id):
+        return await cb.answer("Заблокировано", show_alert=True)
+    pid = cb.data.split(":", 1)[1]
+    p = _own_mono_pending(pid, cb.from_user.id)
+    if not p:
+        return await cb.answer("Заявка не найдена.", show_alert=True)
+    if p.get("status") == "paid":
+        return await cb.answer("Уже зачислено.", show_alert=True)
+    if p.get("status") != "pending" or monopay.is_expired(p):
+        return await cb.answer("Время оплаты истекло или заявка закрыта. Создайте новую.", show_alert=True)
+    if pid in _checking:
+        return await cb.answer("Проверка уже идёт, подождите.", show_alert=True)
+    _checking.add(pid)
+    try:
+        await cb.answer()
+        pressed = time.monotonic()
+        prog = await cb.message.answer("⏳ Идёт проверка платежа, подождите минуту…")
+        res = await monopay.verify(pid, pressed)
+        if res == "paid":
+            fresh = db.get_pending(pid)
+            await credit_payment(bot, fresh, "Карта (Monobank)")
+            text = "✅ Платёж найден! Баланс пополнен."
+        elif res == "closed":
+            text = "✅ Платёж уже обработан — проверьте баланс."
+        elif res == "expired":
+            text = "⏰ Время оплаты истекло. Создайте новую заявку через «Пополнить»."
+        elif res == "pending":
+            text = (f"❌ Платёж не найден.\n\nПроверьте, что вы перевели ровно <b>{money(float(p['amount']))}</b> (с копейками) на указанную карту. "
+                    f"Банк иногда зачисляет с задержкой — подождите пару минут и нажмите «Проверить оплату» ещё раз.")
+        else:
+            text = "⚠️ Не удалось связаться с банком. Повторите проверку через минуту."
+        try:
+            await prog.edit_text(text, parse_mode=ParseMode.HTML)
+        except Exception:
+            await cb.message.answer(text, parse_mode=ParseMode.HTML)
+    finally:
+        _checking.discard(pid)
+
+
+@router.callback_query(F.data.startswith("mono_cancel:"))
+async def mono_cancel(cb: CallbackQuery):
+    pid = cb.data.split(":", 1)[1]
+    p = _own_mono_pending(pid, cb.from_user.id)
+    if not p:
+        return await cb.answer("Заявка не найдена.", show_alert=True)
+    if p.get("status") == "pending":
+        db.claim_pending(pid, "canceled")
+    await cb.answer("Отменено.")
+    try:
+        await cb.message.edit_text("❌ Заявка на пополнение отменена.")
+    except Exception:
+        pass
 
 
 # ── карта: «Я оплатил» → чек ───────────────────────────────

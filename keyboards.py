@@ -31,6 +31,7 @@ B_MYACC      = "Мои аккаунты"
 B_HISTORY    = "История пополнений"
 B_PROMO      = "Промокод"
 B_REFERRAL   = "Рефералы"
+B_LANG       = "Язык / Мова"
 B_INFO       = "Информация"
 B_CARD       = "Перевод на карту"
 B_CRYPTO     = "Crypto Bot"
@@ -87,7 +88,7 @@ _ICON: dict[str, str] = {
     B_TOPUP: I["wallet"], B_ADMIN: I["settings"], B_BACK: I["back"], B_HOME: I["home"],
     B_CANCEL: I["cancel"], B_BUY: I["ok"], B_GETCODE: I["unlock"], B_RESET: I["repeat"],
     B_RESET_YES: I["ok"], B_REPLACE: I["doc"], B_MYACC: I["list"], B_HISTORY: I["recent"],
-    B_PROMO: I["tag"], B_REFERRAL: I["people"], B_INFO: I["info"],
+    B_PROMO: I["tag"], B_REFERRAL: I["people"], B_LANG: I["globe"], B_INFO: I["info"],
     B_CARD: I["atm"], B_CRYPTO: I["dollar"], B_TON_TOPUP: I["ton"],
     B_STARS: I["stars"], B_PREMIUM: I["premium"], B_FRAG_PAY: I["ok"],
     B_FRAG_CUSTOM: I["edit"], B_FRAG_SELF: I["profile"],
@@ -188,7 +189,7 @@ def kb_nofunds() -> ReplyKeyboardMarkup:
 
 
 def kb_profile() -> ReplyKeyboardMarkup:
-    return _kb([[B_MYACC], [B_HISTORY, B_PROMO], [B_REFERRAL], [B_BACK]])
+    return _kb([[B_MYACC], [B_HISTORY, B_PROMO], [B_REFERRAL, B_LANG], [B_BACK]])
 
 
 def kb_accounts(labels: list[str]) -> ReplyKeyboardMarkup:
