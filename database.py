@@ -410,6 +410,10 @@ class Database:
              .eq("payment_id", pid).eq("status", old_status).execute())
         return bool(r.data)
 
+    def list_pending_by_status(self, status: str) -> list[dict]:
+        r = self.sb.table("pending_payments").select("*").eq("status", status).execute()
+        return r.data or []
+
     def list_open_pending(self) -> list[dict]:
         r = self.sb.table("pending_payments").select("*").eq("status", "pending").execute()
         return r.data or []
