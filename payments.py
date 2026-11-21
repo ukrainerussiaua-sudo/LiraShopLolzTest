@@ -118,6 +118,11 @@ async def credit_payment(bot: Bot, p: dict, label: str):
 
 async def check_pending_once(bot: Bot, last_check: dict[str, float]) -> None:
     """Один проход по открытым счетам. Вынесено отдельно, чтобы тестировать без бесконечного цикла."""
+    # Ручное подтверждение из Supabase: статус 'manual_paid' → зачисляем + сообщения клиенту и админам
+    for p in await asyncio.to_thread(db.list_pending_by_status, "manual_paid"):
+        if await asyncio.to_thread(db.claim_pending_from, p["payment_id"], "manual_paid", "paid"):
+            await credit_topup(bot, int(p["user_id"]), float(p["amount"]), "Ручное подтверждение")
+
     for p in await asyncio.to_thread(db.list_open_pending):
         pid = p["payment_id"]
         method = p.get("method") or ("crypto" if str(pid).isdigit() else "card")
